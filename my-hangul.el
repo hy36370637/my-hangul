@@ -4,6 +4,7 @@
 ;;  - NavilIME 구조 포팅 (preedit/commit 분리)
 ;;  - ㅐ+ㅐ→ㅒ, ㅔ+ㅔ→ㅖ 지원
 ;;  - C-/M-/s- 조합키는 Emacs에 그대로 전달
+;; ㅆ 받침 미지원
 
 (require 'quail)
 
