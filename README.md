@@ -42,5 +42,5 @@
 The input method utilizes a specialized state-machine automaton to handle the transitions between Chosung (Initial), Jungsung (Vowel), and Jongsung (Final) characters. It includes a `jong-to-cho` transition table to facilitate the "Dokkaebibul" effect, ensuring that the final consonant of a previous syllable correctly moves to the initial position of the next syllable when a vowel is followed.
 
 ## License
-
-[MIT License](LICENSE)
+This project is licensed under the **GNU General Public License v3.0 (GPLv3)**.  
+See the [LICENSE](LICENSE) file for the full license text.
