@@ -1,504 +1,289 @@
 ;; -*- lexical-binding: t -*-
-;;  my-hangul.el
-;;  두벌식 한글 입력기
-;;  - NavilIME 구조 포팅 (preedit/commit 분리)
-;;  - ㅐ+ㅐ→ㅒ, ㅔ+ㅔ→ㅖ 지원
-;;  - C-/M-/s- 조합키는 Emacs에 그대로 전달
-;; ㅆ 받침 미지원
+;;  my-hangul.el — 두벌식 한글 입력기
+;;  NavilIME Hangul.swift + Keyboard002.swift 직접 포팅
+;;
+;;  키 배치:
+;;   q=ㅂ  w=ㅈ  e=ㄷ  r=ㄱ  t=ㅅ  y=ㅛ  u=ㅕ  i=ㅑ  o=ㅐ  p=ㅔ
+;;   a=ㅁ  s=ㄴ  d=ㅇ  f=ㄹ  g=ㅎ  h=ㅗ  j=ㅓ  k=ㅏ  l=ㅣ
+;;   z=ㅋ  x=ㅌ  c=ㅊ  v=ㅍ  b=ㅠ  n=ㅜ  m=ㅡ
+;;   Q=ㅃ  W=ㅉ  E=ㄸ  R=ㄲ  T=ㅆ(초성/종성)  O=ㅒ  P=ㅖ
+;;   연속: qq=ㅃ ww=ㅉ ee=ㄸ rr=ㄲ tt=ㅆ(초성) oo=ㅒ pp=ㅖ tt=ㅆ(종성)
 
 (require 'quail)
 
-;;
-;; ============================================================
-;; 자판 테이블 (표준 두벌식)
-;;
-;; q=ㅂ  w=ㅈ  e=ㄷ  r=ㄱ  t=ㅅ  y=ㅛ  u=ㅕ  i=ㅑ  o=ㅐ  p=ㅔ
-;; a=ㅁ  s=ㄴ  d=ㅇ  f=ㄹ  g=ㅎ  h=ㅗ  j=ㅓ  k=ㅏ  l=ㅣ
-;; z=ㅋ  x=ㅌ  c=ㅊ  v=ㅍ  b=ㅠ  n=ㅜ  m=ㅡ
-;; Q=ㅃ  W=ㅉ  E=ㄸ  R=ㄲ  T=ㅆ  O=ㅒ  P=ㅖ
-;; ============================================================
+;;; ============================================================
+;;; 레이아웃 테이블 (Keyboard002.swift 그대로)
+;;; ============================================================
 
-;; 초성: Keyboard002.swift no_shift_cho + shift_cho 기준
-(defconst my-hangul-chosung-table
-  '(;; 쌍자음 — 연속입력 및 Shift 모두 지원
-    ("Q"  . #x1108)  ; ㅃ  Shift+q
-    ("qq" . #x1108)  ; ㅃ  연속
-    ("W"  . #x110D)  ; ㅉ  Shift+w
-    ("ww" . #x110D)  ; ㅉ  연속
-    ("E"  . #x1104)  ; ㄸ  Shift+e
-    ("ee" . #x1104)  ; ㄸ  연속
-    ("R"  . #x1101)  ; ㄲ  Shift+r
-    ("rr" . #x1101)  ; ㄲ  연속
-    ("T"  . #x110A)  ; ㅆ  Shift+t
-    ("tt" . #x110A)  ; ㅆ  연속
-    ;; 단일 자음
-    ("q"  . #x1107)  ; ㅂ
-    ("w"  . #x110C)  ; ㅈ
-    ("e"  . #x1103)  ; ㄷ
-    ("r"  . #x1100)  ; ㄱ
-    ("t"  . #x1109)  ; ㅅ
-    ("a"  . #x1106)  ; ㅁ
-    ("A"  . #x1106)  ; ㅁ  (Shift 늦게 뗄 때 대비)
-    ("s"  . #x1102)  ; ㄴ
-    ("S"  . #x1102)  ; ㄴ
-    ("d"  . #x110B)  ; ㅇ
-    ("D"  . #x110B)  ; ㅇ
-    ("f"  . #x1105)  ; ㄹ
-    ("F"  . #x1105)  ; ㄹ
-    ("g"  . #x1112)  ; ㅎ
-    ("G"  . #x1112)  ; ㅎ
-    ("z"  . #x110F)  ; ㅋ
-    ("Z"  . #x110F)  ; ㅋ
-    ("x"  . #x1110)  ; ㅌ
-    ("X"  . #x1110)  ; ㅌ
-    ("c"  . #x110E)  ; ㅊ
-    ("C"  . #x110E)  ; ㅊ
-    ("v"  . #x1111)  ; ㅍ
-    ("V"  . #x1111)) ; ㅍ
-  "두벌식 초성 테이블 (Keyboard002 기준).")
+(defconst my-hangul-cho-layout
+  '(("Q" . #x1108) ("qq" . #x1108)
+    ("W" . #x110D) ("ww" . #x110D)
+    ("E" . #x1104) ("ee" . #x1104)
+    ("R" . #x1101) ("rr" . #x1101)
+    ("T" . #x110A) ("tt" . #x110A)
+    ("q" . #x1107) ("w" . #x110C) ("e" . #x1103) ("r" . #x1100) ("t" . #x1109)
+    ("a" . #x1106) ("A" . #x1106) ("s" . #x1102) ("S" . #x1102)
+    ("d" . #x110B) ("D" . #x110B) ("f" . #x1105) ("F" . #x1105)
+    ("g" . #x1112) ("G" . #x1112) ("z" . #x110F) ("Z" . #x110F)
+    ("x" . #x1110) ("X" . #x1110) ("c" . #x110E) ("C" . #x110E)
+    ("v" . #x1111) ("V" . #x1111)))
 
-;; 중성: Keyboard002.swift jungsung_layout 기준
-(defconst my-hangul-jungsung-table
-  '(;; 이중모음 연속입력 ★
-    ("oo" . #x1164)  ; ㅒ  o+o
-    ("pp" . #x1168)  ; ㅖ  p+p
-    ;; 이중모음 (복합)
-    ("hk" . #x116A)  ; ㅘ  h+k
-    ("ho" . #x116B)  ; ㅙ  h+o
-    ("hl" . #x116C)  ; ㅚ  h+l
-    ("nj" . #x116F)  ; ㅝ  n+j
-    ("np" . #x1170)  ; ㅞ  n+p
-    ("nl" . #x1171)  ; ㅟ  n+l
-    ("ml" . #x1174)  ; ㅢ  m+l
-    ;; Shift 모음
-    ("O"  . #x1164)  ; ㅒ  Shift+o
-    ("P"  . #x1168)  ; ㅖ  Shift+p
-    ;; 단일 모음 — 대문자도 매핑 (Keyboard002 주석 참고)
-    ("y"  . #x116D)  ; ㅛ
-    ("Y"  . #x116D)  ; ㅛ
-    ("u"  . #x1167)  ; ㅕ
-    ("U"  . #x1167)  ; ㅕ
-    ("i"  . #x1163)  ; ㅑ
-    ("I"  . #x1163)  ; ㅑ
-    ("o"  . #x1162)  ; ㅐ  (이중모음 있으므로 대문자 맵핑 안함)
-    ("p"  . #x1166)  ; ㅔ  (이중모음 있으므로 대문자 맵핑 안함)
-    ("h"  . #x1169)  ; ㅗ
-    ("H"  . #x1169)  ; ㅗ
-    ("j"  . #x1165)  ; ㅓ
-    ("J"  . #x1165)  ; ㅓ
-    ("k"  . #x1161)  ; ㅏ
-    ("K"  . #x1161)  ; ㅏ
-    ("l"  . #x1175)  ; ㅣ
-    ("L"  . #x1175)  ; ㅣ
-    ("b"  . #x1172)  ; ㅠ
-    ("B"  . #x1172)  ; ㅠ
-    ("n"  . #x116E)  ; ㅜ
-    ("N"  . #x116E)  ; ㅜ
-    ("m"  . #x1173)  ; ㅡ
-    ("M"  . #x1173)) ; ㅡ
-  "두벌식 중성 테이블 (Keyboard002 기준).")
+(defconst my-hangul-jung-layout
+  '(("O" . #x1164) ("oo" . #x1164)
+    ("P" . #x1168) ("pp" . #x1168)
+    ("y" . #x116D) ("Y" . #x116D) ("u" . #x1167) ("U" . #x1167)
+    ("i" . #x1163) ("I" . #x1163)
+    ("o" . #x1162) ("p" . #x1166)
+    ("h" . #x1169) ("H" . #x1169) ("j" . #x1165) ("J" . #x1165)
+    ("k" . #x1161) ("K" . #x1161) ("l" . #x1175) ("L" . #x1175)
+    ("b" . #x1172) ("B" . #x1172) ("n" . #x116E) ("N" . #x116E)
+    ("m" . #x1173) ("M" . #x1173)
+    ("hk" . #x116A) ("Hk" . #x116A) ("HK" . #x116A)
+    ("ho" . #x116B) ("Ho" . #x116B) ("HO" . #x116B)
+    ("nj" . #x116F) ("Nj" . #x116F) ("NJ" . #x116F)
+    ("np" . #x1170) ("Np" . #x1170) ("NP" . #x1170)
+    ("hl" . #x116C) ("Hl" . #x116C) ("HL" . #x116C)
+    ("nl" . #x1171) ("Nl" . #x1171) ("NL" . #x1171)
+    ("ml" . #x1174) ("Ml" . #x1174) ("ML" . #x1174)))
 
-;; 종성: Keyboard002.swift jongsung_layout 기준
-;; 주의: tt→ㅆ 없음. 종성 ㅆ은 T(Shift+t)로만.
-(defconst my-hangul-jongsung-table
-  '(;; 겹받침
-    ("rt" . #x11AA)  ; ㄳ
-    ("sw" . #x11AC)  ; ㄵ
-    ("sg" . #x11AD)  ; ㄶ
-    ("fr" . #x11B0)  ; ㄺ
-    ("fa" . #x11B1)  ; ㄻ
-    ("fq" . #x11B2)  ; ㄼ
-    ("ft" . #x11B3)  ; ㄽ
-    ("fx" . #x11B4)  ; ㄾ
-    ("fv" . #x11B5)  ; ㄿ
-    ("fg" . #x11B6)  ; ㅀ
-    ("qt" . #x11B9)  ; ㅄ
-    ;; 단일 종성
-    ("r"  . #x11A8)  ; ㄱ
-    ("R"  . #x11A9)  ; ㄲ  Shift+r
-    ("s"  . #x11AB)  ; ㄴ
-    ("S"  . #x11AB)  ; ㄴ
-    ("e"  . #x11AE)  ; ㄷ
-    ("E"  . #x11AE)  ; ㄷ
-    ("f"  . #x11AF)  ; ㄹ
-    ("F"  . #x11AF)  ; ㄹ
-    ("a"  . #x11B7)  ; ㅁ
-    ("A"  . #x11B7)  ; ㅁ
-    ("q"  . #x11B8)  ; ㅂ
-    ("Q"  . #x11B8)  ; ㅂ
-    ("t"  . #x11BA)  ; ㅅ
-    ("T"  . #x11BB)  ; ㅆ  Shift+t 로만 (tt 연속입력 불가 — 햇사과 문제)
-    ("d"  . #x11BC)  ; ㅇ
-    ("D"  . #x11BC)  ; ㅇ
-    ("w"  . #x11BD)  ; ㅈ
-    ("W"  . #x11BD)  ; ㅈ
-    ("c"  . #x11BE)  ; ㅊ
-    ("C"  . #x11BE)  ; ㅊ
-    ("z"  . #x11BF)  ; ㅋ
-    ("Z"  . #x11BF)  ; ㅋ
-    ("x"  . #x11C0)  ; ㅌ
-    ("X"  . #x11C0)  ; ㅌ
-    ("v"  . #x11C1)  ; ㅍ
-    ("V"  . #x11C1)  ; ㅍ
-    ("g"  . #x11C2)  ; ㅎ
-    ("G"  . #x11C2)) ; ㅎ
-  "두벌식 종성 테이블 (Keyboard002 기준).")
+(defconst my-hangul-jong-layout
+  '(("r"  . #x11A8) ("R"  . #x11A9)
+    ("rt" . #x11AA) ("Rt" . #x11AA) ("RT" . #x11AA)
+    ("s"  . #x11AB) ("S"  . #x11AB)
+    ("sw" . #x11AC) ("Sw" . #x11AC) ("SW" . #x11AC)
+    ("sg" . #x11AD) ("Sg" . #x11AD) ("SG" . #x11AD)
+    ("e"  . #x11AE) ("E"  . #x11AE)
+    ("f"  . #x11AF) ("F"  . #x11AF)
+    ("fr" . #x11B0) ("Fr" . #x11B0) ("FR" . #x11B0)
+    ("fa" . #x11B1) ("Fa" . #x11B1) ("FA" . #x11B1)
+    ("fq" . #x11B2) ("Fq" . #x11B2) ("FQ" . #x11B2)
+    ("ft" . #x11B3) ("Ft" . #x11B3) ("FT" . #x11B3)
+    ("fx" . #x11B4) ("Fx" . #x11B4) ("FX" . #x11B4)
+    ("fv" . #x11B5) ("Fv" . #x11B5) ("FV" . #x11B5)
+    ("fg" . #x11B6) ("Fg" . #x11B6) ("FG" . #x11B6)
+    ("a"  . #x11B7) ("A"  . #x11B7)
+    ("q"  . #x11B8) ("Q"  . #x11B8)
+    ("qt" . #x11B9) ("Qt" . #x11B9) ("QT" . #x11B9)
+    ("t"  . #x11BA) ("T"  . #x11BB) ("tt" . #x11BB)
+    ("d"  . #x11BC) ("D"  . #x11BC)
+    ("w"  . #x11BD) ("W"  . #x11BD)
+    ("c"  . #x11BE) ("C"  . #x11BE)
+    ("z"  . #x11BF) ("Z"  . #x11BF)
+    ("x"  . #x11C0) ("X"  . #x11C0)
+    ("v"  . #x11C1) ("V"  . #x11C1)
+    ("g"  . #x11C2) ("G"  . #x11C2)))
 
-;; 종성 → (앞글자에 남는 종성 . 다음글자 초성) 변환
-;; 겹받침: 앞 자음은 현 글자 종성으로 남고, 뒤 자음은 다음 글자 초성으로
-(defconst my-hangul-jong-to-cho
-  '((#x11A8 . (nil    . #x1100))  ; ㄱ       -> X  + ㄱ
-    (#x11A9 . (nil    . #x1101))  ; ㄲ       -> X  + ㄲ
-    (#x11AA . (#x11A8 . #x1109))  ; ㄳ(ㄱㅅ) -> ㄱ + ㅅ
-    (#x11AB . (nil    . #x1102))  ; ㄴ       -> X  + ㄴ
-    (#x11AC . (#x11AB . #x110C))  ; ㄵ(ㄴㅈ) -> ㄴ + ㅈ
-    (#x11AD . (#x11AB . #x1112))  ; ㄶ(ㄴㅎ) -> ㄴ + ㅎ
-    (#x11AE . (nil    . #x1103))  ; ㄷ       -> X  + ㄷ
-    (#x11AF . (nil    . #x1105))  ; ㄹ       -> X  + ㄹ
-    (#x11B0 . (#x11AF . #x1100))  ; ㄺ(ㄹㄱ) -> ㄹ + ㄱ
-    (#x11B1 . (#x11AF . #x1106))  ; ㄻ(ㄹㅁ) -> ㄹ + ㅁ
-    (#x11B2 . (#x11AF . #x1107))  ; ㄼ(ㄹㅂ) -> ㄹ + ㅂ
-    (#x11B3 . (#x11AF . #x1109))  ; ㄽ(ㄹㅅ) -> ㄹ + ㅅ
-    (#x11B4 . (#x11AF . #x1110))  ; ㄾ(ㄹㅌ) -> ㄹ + ㅌ
-    (#x11B5 . (#x11AF . #x1111))  ; ㄿ(ㄹㅍ) -> ㄹ + ㅍ
-    (#x11B6 . (#x11AF . #x1112))  ; ㅀ(ㄹㅎ) -> ㄹ + ㅎ
-    (#x11B7 . (nil    . #x1106))  ; ㅁ       -> X  + ㅁ
-    (#x11B8 . (nil    . #x1107))  ; ㅂ       -> X  + ㅂ
-    (#x11B9 . (#x11B8 . #x1109))  ; ㅄ(ㅂㅅ) -> ㅂ + ㅅ
-    (#x11BA . (nil    . #x1109))  ; ㅅ       -> X  + ㅅ
-    (#x11BB . (nil    . #x110A))  ; ㅆ       -> X  + ㅆ
-    (#x11BC . (nil    . #x110B))  ; ㅇ       -> X  + ㅇ
-    (#x11BD . (nil    . #x110C))  ; ㅈ       -> X  + ㅈ
-    (#x11BE . (nil    . #x110E))  ; ㅊ       -> X  + ㅊ
-    (#x11BF . (nil    . #x110F))  ; ㅋ       -> X  + ㅋ
-    (#x11C0 . (nil    . #x1110))  ; ㅌ       -> X  + ㅌ
-    (#x11C1 . (nil    . #x1111))  ; ㅍ       -> X  + ㅍ
-    (#x11C2 . (nil    . #x1112))) ; ㅎ       -> X  + ㅎ
-  "종성 -> (남는종성 . 다음초성) 변환 테이블.")
+(defconst my-hangul-cho-compat
+  '((#x1100 . #x3131) (#x1101 . #x3132) (#x1102 . #x3134)
+    (#x1103 . #x3137) (#x1104 . #x3138) (#x1105 . #x3139)
+    (#x1106 . #x3141) (#x1107 . #x3142) (#x1108 . #x3143)
+    (#x1109 . #x3145) (#x110A . #x3146) (#x110B . #x3147)
+    (#x110C . #x3148) (#x110D . #x3149) (#x110E . #x314A)
+    (#x110F . #x314B) (#x1110 . #x314C) (#x1111 . #x314D)
+    (#x1112 . #x314E)))
 
-;;
-;; ============================================================
-;; 조합 상태 변수
-;; cho-key, jung-key, jong-key 를 각각 별도 추적 (핵심)
-;; ============================================================
+;;; ============================================================
+;;; 유니코드 조합
+;;; ============================================================
 
-(defvar-local my-hangul--cho      nil  "현재 초성 유니코드.")
-(defvar-local my-hangul--jung     nil  "현재 중성 유니코드.")
-(defvar-local my-hangul--jong     nil  "현재 종성 유니코드.")
-(defvar-local my-hangul--cho-key  ""   "초성 키 시퀀스 (쌍자음 판별용).")
-(defvar-local my-hangul--jung-key ""   "중성 키 시퀀스 (복합모음 판별용).")
-(defvar-local my-hangul--jong-key ""   "종성 키 시퀀스 (겹받침 판별용).")
-(defvar-local my-hangul--overlay  nil  "Preedit overlay.")
-
-;;
-;; ============================================================
-;; 유니코드 조합
-;; ============================================================
-
-(defun my-hangul--compose ()
-  "현재 상태 → 유니코드 문자열."
-  (let ((cho  my-hangul--cho)
-        (jung my-hangul--jung)
-        (jong my-hangul--jong))
+(defun my-hangul--norm (cho-k jung-k jong-k)
+  "키 문자열 → 유니코드 문자열."
+  (let ((cho  (cdr (assoc cho-k  my-hangul-cho-layout)))
+        (jung (cdr (assoc jung-k my-hangul-jung-layout)))
+        (jong (cdr (assoc jong-k my-hangul-jong-layout))))
     (cond
      ((and cho jung jong)
       (string (decode-char 'ucs
-               (+ #xAC00
-                  (* (- cho  #x1100) 21 28)
-                  (* (- jung #x1161) 28)
-                  (- jong #x11A7)))))
+               (+ #xAC00 (* (- cho #x1100) 21 28)
+                  (* (- jung #x1161) 28) (- jong #x11A7)))))
      ((and cho jung)
       (string (decode-char 'ucs
-               (+ #xAC00
-                  (* (- cho  #x1100) 21 28)
-                  (* (- jung #x1161) 28)))))
+               (+ #xAC00 (* (- cho #x1100) 21 28) (* (- jung #x1161) 28)))))
      (jung (string (decode-char 'ucs jung)))
-     ;; 초성 → 호환 자모 변환 (초성 순서 ≠ 호환 자모 순서이므로 테이블 필요)
-     (cho  (let ((cho-to-hohan
-                  '((#x1100 . #x3131)  ; ㄱ
-                    (#x1101 . #x3132)  ; ㄲ
-                    (#x1102 . #x3134)  ; ㄴ
-                    (#x1103 . #x3137)  ; ㄷ
-                    (#x1104 . #x3138)  ; ㄸ
-                    (#x1105 . #x3139)  ; ㄹ
-                    (#x1106 . #x3141)  ; ㅁ
-                    (#x1107 . #x3142)  ; ㅂ
-                    (#x1108 . #x3143)  ; ㅃ
-                    (#x1109 . #x3145)  ; ㅅ
-                    (#x110A . #x3146)  ; ㅆ
-                    (#x110B . #x3147)  ; ㅇ
-                    (#x110C . #x3148)  ; ㅈ
-                    (#x110D . #x3149)  ; ㅉ
-                    (#x110E . #x314A)  ; ㅊ
-                    (#x110F . #x314B)  ; ㅋ
-                    (#x1110 . #x314C)  ; ㅌ
-                    (#x1111 . #x314D)  ; ㅍ
-                    (#x1112 . #x314E)))) ; ㅎ
-             (string (decode-char 'ucs
-                      (or (cdr (assoc cho cho-to-hohan)) #x3131)))))
-     (t    ""))))
+     (cho  (string (decode-char 'ucs
+                    (or (cdr (assoc cho my-hangul-cho-compat)) #x3131))))
+     (t ""))))
 
-;;
-;; ============================================================
-;; 헬퍼
-;; ============================================================
+;;; ============================================================
+;;; Automata.run() 포팅
+;;; ============================================================
 
-(defun my-hangul--lookup (table key)
-  (cdr (assoc key table)))
+(defun my-hangul--run (current)
+  "나빌 Automata.run() 포팅.
+CURRENT: 키 문자열 리스트.
+반환: (cho jung jong done remaining)"
+  (let ((cho "") (jung "") (jong "") (done nil))
+    (catch 'exit
+      (dolist (ch current)
+        ;; chosung_proc: 초성+중성 둘 다 있으면 false
+        (let ((can-cho (and (not (and (not (string= cho ""))
+                                      (not (string= jung ""))))
+                            (assoc (concat cho ch) my-hangul-cho-layout)))
+              (in-jung (assoc ch my-hangul-jung-layout)))
+          (cond
+           ;; 초성 가능
+           (can-cho
+            (cond
+             ((string= cho "") (setq cho ch))
+             ((string= jung "") (setq cho (concat cho ch))) ; 쌍자음
+             (t (setq done t) (throw 'exit nil))))
 
-(defun my-hangul--reset ()
-  (setq my-hangul--cho      nil
-        my-hangul--jung     nil
-        my-hangul--jong     nil
-        my-hangul--cho-key  ""
-        my-hangul--jung-key ""
-        my-hangul--jong-key ""))
+           ;; 중성 가능 — jungsung_proc 포팅
+           (in-jung
+            (if (not (string= jong ""))
+                ;; 종성 있음: 마지막 글자가 초성 테이블에 있으면 도깨비불
+                (let* ((jong-chars (string-to-list jong))
+                       (jong-last  (string (car (last jong-chars))))
+                       (jong-rest  (apply #'string (butlast jong-chars))))
+                  (if (assoc jong-last my-hangul-cho-layout)
+                      (progn
+                        (setq jong jong-rest)
+                        (setq done t)
+                        (throw 'exit nil))
+                    ;; 도깨비불 아님: 이중모음 시도
+                    (if (assoc (concat jung ch) my-hangul-jung-layout)
+                        (setq jung (concat jung ch))
+                      (setq done t) (throw 'exit nil))))
+              ;; 종성 없음: 이중모음 또는 첫 중성
+              (if (assoc (concat jung ch) my-hangul-jung-layout)
+                  (setq jung (concat jung ch))
+                (setq done t) (throw 'exit nil))))
 
-;;
-;; ============================================================
-;; Preedit overlay
-;; ============================================================
+           ;; 종성 가능 — jongsung_proc: 중성 있을 때만
+           ((and (not (string= jung ""))
+                 (assoc (concat jong ch) my-hangul-jong-layout))
+            (setq jong (concat jong ch)))
 
-(defun my-hangul--show-preedit ()
-  (unless (and my-hangul--overlay
-               (overlay-buffer my-hangul--overlay))
-    (setq my-hangul--overlay (make-overlay (point) (point)))
-    (overlay-put my-hangul--overlay 'face 'underline))
-  (overlay-put my-hangul--overlay 'before-string (my-hangul--compose))
-  (move-overlay my-hangul--overlay (point) (point)))
+           ;; 허용 안 됨
+           (t (setq done t) (throw 'exit nil))))))
 
-(defun my-hangul--clear-preedit ()
-  (when (and my-hangul--overlay
-             (overlay-buffer my-hangul--overlay))
-    (delete-overlay my-hangul--overlay))
-  (setq my-hangul--overlay nil))
+    (let* ((size (+ (length cho) (length jung) (length jong)))
+           (remaining (if done (nthcdr size current) nil)))
+      (list cho jung jong done remaining))))
 
-(defun my-hangul--commit-current ()
-  "현재 조합 글자 확정 후 상태 초기화."
-  (let ((str (my-hangul--compose)))
-    (my-hangul--clear-preedit)
-    (when (> (length str) 0)
-      (insert str)))
-  (my-hangul--reset))
+;;; ============================================================
+;;; 오토마타 상태
+;;; ============================================================
 
-;;
-;; ============================================================
-;; 키 처리 오토마타
-;; ============================================================
+(defvar-local my-hangul--current nil)
+(defvar-local my-hangul--preedit 0)
+(defvar-local my-hangul--overlay nil)
 
-(defun my-hangul--handle (ch)
-  "키 문자열 CH 하나를 처리."
-  (cond
+;;; ============================================================
+;;; Preedit
+;;; ============================================================
 
-   ;; ── 1. 종성 있음 ─────────────────────────────────────────
-   (my-hangul--jong
-    (let* ((jong-try (concat my-hangul--jong-key ch))
-           (jong2    (my-hangul--lookup my-hangul-jongsung-table jong-try))
-           (is-jung  (my-hangul--lookup my-hangul-jungsung-table ch)))
-      (cond
-       ;; 겹받침 가능
-       (jong2
-        (setq my-hangul--jong     jong2
-              my-hangul--jong-key jong-try)
-        (my-hangul--show-preedit))
+(defun my-hangul--char-count (str)
+  "STR 의 문자 수 (바이트 수 아님)."
+  (length (string-to-list str)))
 
-       ;; 중성 입력 → 도깨비불
-       (is-jung
-        (let* ((split   (cdr (assoc my-hangul--jong my-hangul-jong-to-cho)))
-               (rem-jong (car split))   ; 앞글자에 남는 종성 (겹받침 앞자음)
-               (new-cho  (cdr split)))  ; 다음글자 초성 (겹받침 뒷자음)
-          ;; 남는 종성으로 교체 후 현재 글자 확정
-          (setq my-hangul--jong     rem-jong
-                my-hangul--jong-key "")
-          (my-hangul--commit-current)
-          ;; 새 글자 시작: 분리된 초성 + 새 중성
-          (setq my-hangul--cho      new-cho
-                my-hangul--cho-key  ""
-                my-hangul--jung     is-jung
-                my-hangul--jung-key ch)
-          (my-hangul--show-preedit)))
+(defun my-hangul--show (str)
+  (when (> my-hangul--preedit 0)
+    (delete-char (- my-hangul--preedit)))
+  (let ((nchars (my-hangul--char-count str)))
+    (if (> nchars 0)
+        (progn
+          (insert str)
+          (setq my-hangul--preedit nchars)
+          (unless (and my-hangul--overlay (overlay-buffer my-hangul--overlay))
+            (setq my-hangul--overlay (make-overlay (point) (point)))
+            (overlay-put my-hangul--overlay 'face 'underline))
+          (move-overlay my-hangul--overlay (- (point) nchars) (point)))
+      (setq my-hangul--preedit 0)
+      (when (and my-hangul--overlay (overlay-buffer my-hangul--overlay))
+        (delete-overlay my-hangul--overlay) (setq my-hangul--overlay nil))))
+  (redisplay))
 
-       ;; 그 외 → 현재 확정, 새 글자
-       (t
-        (my-hangul--commit-current)
-        (my-hangul--handle ch)))))
+(defun my-hangul--clear ()
+  (when (> my-hangul--preedit 0)
+    (delete-char (- my-hangul--preedit)) (setq my-hangul--preedit 0))
+  (when (and my-hangul--overlay (overlay-buffer my-hangul--overlay))
+    (delete-overlay my-hangul--overlay) (setq my-hangul--overlay nil)))
 
-   ;; ── 2. 중성 있음 ─────────────────────────────────────────
-   (my-hangul--jung
-    (let* ((jung-try (concat my-hangul--jung-key ch))
-           (jung2    (my-hangul--lookup my-hangul-jungsung-table jung-try))
-           (jong1    (my-hangul--lookup my-hangul-jongsung-table ch)))
-      (cond
-       ;; 복합 중성 (oo→ㅒ, pp→ㅖ, hk→ㅘ 등) — jung-key 기준
-       (jung2
-        (setq my-hangul--jung     jung2
-              my-hangul--jung-key jung-try)
-        (my-hangul--show-preedit))
+;;; ============================================================
+;;; Process / Flush / Backspace
+;;; ============================================================
 
-       ;; 종성 가능
-       (jong1
-        (setq my-hangul--jong     jong1
-              my-hangul--jong-key ch)
-        (my-hangul--show-preedit))
+(defun my-hangul--process (ch)
+  (setq my-hangul--current (append my-hangul--current (list ch)))
+  (let* ((result    (my-hangul--run my-hangul--current))
+         (cho       (nth 0 result))
+         (jung      (nth 1 result))
+         (jong      (nth 2 result))
+         (done      (nth 3 result))
+         (remaining (nth 4 result)))
+    (while done
+      (my-hangul--clear)
+      (let ((str (my-hangul--norm cho jung jong)))
+        (when (> (length str) 0) (insert str)))
+      (setq my-hangul--current remaining)
+      (let* ((r2  (my-hangul--run my-hangul--current)))
+        (setq cho (nth 0 r2) jung (nth 1 r2) jong (nth 2 r2)
+              done (nth 3 r2) remaining (nth 4 r2))))
+    (my-hangul--show (my-hangul--norm cho jung jong))))
 
-       ;; 새 글자 시작
-       (t
-        (my-hangul--commit-current)
-        (my-hangul--handle ch)))))
-
-   ;; ── 3. 초성 있음 ─────────────────────────────────────────
-   (my-hangul--cho
-    (let* ((cho-try (concat my-hangul--cho-key ch))
-           (cho2    (my-hangul--lookup my-hangul-chosung-table cho-try))
-           (jung1   (my-hangul--lookup my-hangul-jungsung-table ch)))
-      (cond
-       ;; 쌍자음 (rr→ㄲ, tt→ㅆ 등) — 초성 단계에서만!
-       (cho2
-        (setq my-hangul--cho     cho2
-              my-hangul--cho-key cho-try)
-        (my-hangul--show-preedit))
-
-       ;; 중성 입력
-       (jung1
-        (setq my-hangul--jung     jung1
-              my-hangul--jung-key ch)
-        (my-hangul--show-preedit))
-
-       ;; 새 글자 시작
-       (t
-        (my-hangul--commit-current)
-        (my-hangul--handle ch)))))
-
-   ;; ── 4. 빈 상태 ───────────────────────────────────────────
-   (t
-    (let ((cho1  (my-hangul--lookup my-hangul-chosung-table ch))
-          (jung1 (my-hangul--lookup my-hangul-jungsung-table ch)))
-      (cond
-       (cho1
-        (setq my-hangul--cho     cho1
-              my-hangul--cho-key ch)
-        (my-hangul--show-preedit))
-       (jung1
-        (setq my-hangul--jung     jung1
-              my-hangul--jung-key ch)
-        (my-hangul--show-preedit))
-       (t
-        ;; 한글 아님 (숫자, 기호 등) → 확정 후 직접 삽입
-        (my-hangul--commit-current)
-        (insert ch)))))))
-
-;;
-;; ============================================================
-;; 백스페이스
-;; ============================================================
+(defun my-hangul--flush ()
+  (when my-hangul--current
+    (let* ((result (my-hangul--run my-hangul--current))
+           (str    (my-hangul--norm (nth 0 result) (nth 1 result) (nth 2 result))))
+      (my-hangul--clear)
+      (when (> (length str) 0) (insert str))
+      (setq my-hangul--current nil))))
 
 (defun my-hangul--backspace ()
-  "자모 단위 백스페이스."
-  (cond
-   ;; 종성 있음 → 종성 제거
-   (my-hangul--jong
-    (setq my-hangul--jong     nil
-          my-hangul--jong-key "")
-    (my-hangul--show-preedit))
-   ;; 중성 복합 → 첫 글자로 복구
-   ((and my-hangul--jung (> (length my-hangul--jung-key) 1))
-    (let* ((fk   (substring my-hangul--jung-key 0 1))
-           (fval (my-hangul--lookup my-hangul-jungsung-table fk)))
-      (setq my-hangul--jung     fval
-            my-hangul--jung-key fk))
-    (my-hangul--show-preedit))
-   ;; 중성 단일 → 중성 제거
-   (my-hangul--jung
-    (setq my-hangul--jung     nil
-          my-hangul--jung-key "")
-    (if my-hangul--cho
-        (my-hangul--show-preedit)
-      (my-hangul--clear-preedit)))
-   ;; 초성 쌍자음 → 첫 글자로 복구
-   ((and my-hangul--cho (> (length my-hangul--cho-key) 1))
-    (let* ((fk   (substring my-hangul--cho-key 0 1))
-           (fval (my-hangul--lookup my-hangul-chosung-table fk)))
-      (setq my-hangul--cho     fval
-            my-hangul--cho-key fk))
-    (my-hangul--show-preedit))
-   ;; 초성 단일 → 초성 제거
-   (my-hangul--cho
-    (setq my-hangul--cho     nil
-          my-hangul--cho-key "")
-    (my-hangul--clear-preedit))
-   ;; 조합 없음 → 앞 글자 삭제
-   (t
-    (delete-char -1))))
+  (if (null my-hangul--current)
+      (delete-char -1)
+    (setq my-hangul--current (butlast my-hangul--current))
+    (let* ((result (my-hangul--run my-hangul--current))
+           (str    (my-hangul--norm (nth 0 result) (nth 1 result) (nth 2 result))))
+      (my-hangul--show str))))
 
-;;
-;; ============================================================
-;; 입력 메서드 메인 루프
-;; ============================================================
+;;; ============================================================
+;;; 입력 메서드
+;;; ============================================================
 
 (defun my-hangul--alpha-p (key)
-  "KEY 가 알파벳(A-Z, a-z)이면 t."
-  (and (>= key ?A)
-       (<= key ?z)
-       (not (and (> key ?Z) (< key ?a)))))
+  (and (>= key ?A) (<= key ?z) (not (and (> key ?Z) (< key ?a)))))
 
 (defun my-hangul-input-method (key)
-  "my-hangul 입력 메서드 진입점."
-  (if (or buffer-read-only
-          (not (my-hangul--alpha-p key)))
+  (if (or buffer-read-only (not (my-hangul--alpha-p key)))
       (list key)
-    (let ((input-method-function nil)
-          (echo-keystrokes 0)
-          (help-char nil))
-      (my-hangul--handle (string key))
+    (let ((input-method-function nil) (echo-keystrokes 0) (help-char nil))
+      (my-hangul--process (string key))
       (unwind-protect
           (catch 'my-hangul-exit
             (while t
-              (let* ((seq      (read-key-sequence nil))
-                     (next-key (and (stringp seq)
-                                    (= 1 (length seq))
-                                    (aref seq 0))))
+              (let* ((event (read-event nil)))
                 (cond
                  ;; 백스페이스
-                 ((eq next-key ?\d)
-                  (my-hangul--backspace))
+                 ((eq event 127) (my-hangul--backspace))
                  ;; 알파벳 → 계속 조합
-                 ((and next-key (my-hangul--alpha-p next-key))
-                  (my-hangul--handle (string next-key)))
-                 ;; 그 외 (보조키, 숫자, Space, Enter 등)
-                 ;; → 현재 글자 확정 후 Emacs에 그대로 전달
+                 ((and (integerp event) (my-hangul--alpha-p event))
+                  (my-hangul--process (string event)))
+                 ;; 그 외 (Space, Enter, 보조키 등) → 확정 후 Emacs에 전달
                  (t
-                  (my-hangul--commit-current)
+                  (my-hangul--flush)
                   (setq unread-command-events
-                        (nconc (listify-key-sequence seq)
-                               unread-command-events))
+                        (cons event unread-command-events))
                   (throw 'my-hangul-exit nil))))))
-        (my-hangul--commit-current)
-        (my-hangul--clear-preedit)))))
+        (my-hangul--flush)
+        (my-hangul--clear)))))
 
-;;
-;; ============================================================
-;; 입력기 등록
-;; ============================================================
+;;; ============================================================
+;;; 입력기 등록
+;;; ============================================================
 
 (defun my-hangul-activate (&rest _)
-  "my-hangul 입력기 활성화."
   (setq deactivate-current-input-method-function #'my-hangul-deactivate)
   (setq-local input-method-function #'my-hangul-input-method))
 
 (defun my-hangul-deactivate ()
-  "my-hangul 입력기 비활성화."
-  (my-hangul--commit-current)
-  (my-hangul--clear-preedit)
+  (my-hangul--flush) (my-hangul--clear)
   (kill-local-variable 'input-method-function))
 
 (register-input-method
- "korean-my-hangul"
- "Korean"
- #'my-hangul-activate
- "한2"
- "두벌식 한글 입력기 (my-hangul)
-ㅐ+ㅐ→ㅒ, ㅔ+ㅔ→ㅖ 지원
-C-/M-/s- 조합키는 Emacs에 그대로 전달")
+ "korean-my-hangul" "Korean" #'my-hangul-activate "한2"
+ "두벌식 한글 입력기 (NavilIME 포팅)")
 
 (provide 'my-hangul)
 ;;; my-hangul.el ends here
