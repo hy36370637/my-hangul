@@ -1,17 +1,16 @@
 ;; -*- lexical-binding: t -*-
 ;;  my-hangul.el — 두벌식 한글 입력기
 ;;  NavilIME Hangul.swift + Keyboard002.swift 직접 포팅
-;;  202604071131Ver
+;;  Ver1.0
 ;;  키 배치:
 ;;   q=ㅂ  w=ㅈ  e=ㄷ  r=ㄱ  t=ㅅ  y=ㅛ  u=ㅕ  i=ㅑ  o=ㅐ  p=ㅔ
 ;;   a=ㅁ  s=ㄴ  d=ㅇ  f=ㄹ  g=ㅎ  h=ㅗ  j=ㅓ  k=ㅏ  l=ㅣ
 ;;   z=ㅋ  x=ㅌ  c=ㅊ  v=ㅍ  b=ㅠ  n=ㅜ  m=ㅡ
 ;;   Q=ㅃ  W=ㅉ  E=ㄸ  R=ㄲ  T=ㅆ(초성/종성)  O=ㅒ  P=ㅖ
 ;;   연속: qq=ㅃ ww=ㅉ ee=ㄸ rr=ㄲ tt=ㅆ(초성) oo=ㅒ pp=ㅖ tt=ㅆ(종성)
-;; 한자/기호 지원(F9)
 
 (require 'quail)
-;; hangul.el load path
+;; hangul.el 은 leim/quail 디렉토리에 있음
 (add-to-list 'load-path
              "/Applications/Emacs.app/Contents/Resources/lisp/leim/quail")
 (require 'hangul)
@@ -320,6 +319,8 @@ CURRENT: 키 문자열 리스트.
 (defun my-hangul-activate (&rest _)
   (setq deactivate-current-input-method-function #'my-hangul-deactivate)
   (quail-setup-overlays nil)
+  (when (eq (selected-window) (minibuffer-window))
+    (add-hook 'minibuffer-exit-hook #'quail-exit-from-minibuffer))
   (setq-local input-method-function #'my-hangul-input-method))
 
 (defun my-hangul-deactivate ()
