@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t -*-
 ;;  my-hangul.el — 두벌식 한글 입력기
 ;;  NavilIME Hangul.swift + Keyboard002.swift 직접 포팅
-;;
+;;  202604071019ver
 ;;  키 배치:
 ;;   q=ㅂ  w=ㅈ  e=ㄷ  r=ㄱ  t=ㅅ  y=ㅛ  u=ㅕ  i=ㅑ  o=ㅐ  p=ㅔ
 ;;   a=ㅁ  s=ㄴ  d=ㅇ  f=ㄹ  g=ㅎ  h=ㅗ  j=ㅓ  k=ㅏ  l=ㅣ
@@ -47,7 +47,7 @@
     ("ml" . #x1174) ("Ml" . #x1174) ("ML" . #x1174)))
 
 (defconst my-hangul-jong-layout
-  '(("r"  . #x11A8) ("R"  . #x11A9)
+  '(("r"  . #x11A8) ("R"  . #x11A9) ("rr" . #x11A9)
     ("rt" . #x11AA) ("Rt" . #x11AA) ("RT" . #x11AA)
     ("s"  . #x11AB) ("S"  . #x11AB)
     ("sw" . #x11AC) ("Sw" . #x11AC) ("SW" . #x11AC)
@@ -83,14 +83,38 @@
     (#x1112 . #x314E)))
 
 ;;; ============================================================
+;;; 해시테이블 (alist → O(1) 탐색)
+;;; ============================================================
+
+(defconst my-hangul-cho-table
+  (let ((h (make-hash-table :test 'equal :size 64)))
+    (dolist (pair my-hangul-cho-layout h)
+      (puthash (car pair) (cdr pair) h))))
+
+(defconst my-hangul-jung-table
+  (let ((h (make-hash-table :test 'equal :size 64)))
+    (dolist (pair my-hangul-jung-layout h)
+      (puthash (car pair) (cdr pair) h))))
+
+(defconst my-hangul-jong-table
+  (let ((h (make-hash-table :test 'equal :size 128)))
+    (dolist (pair my-hangul-jong-layout h)
+      (puthash (car pair) (cdr pair) h))))
+
+(defconst my-hangul-cho-compat-table
+  (let ((h (make-hash-table :test 'eql :size 32)))
+    (dolist (pair my-hangul-cho-compat h)
+      (puthash (car pair) (cdr pair) h))))
+
+;;; ============================================================
 ;;; 유니코드 조합
 ;;; ============================================================
 
 (defun my-hangul--norm (cho-k jung-k jong-k)
   "키 문자열 → 유니코드 문자열."
-  (let ((cho  (cdr (assoc cho-k  my-hangul-cho-layout)))
-        (jung (cdr (assoc jung-k my-hangul-jung-layout)))
-        (jong (cdr (assoc jong-k my-hangul-jong-layout))))
+  (let ((cho  (gethash cho-k  my-hangul-cho-table))
+        (jung (gethash jung-k my-hangul-jung-table))
+        (jong (gethash jong-k my-hangul-jong-table)))
     (cond
      ((and cho jung jong)
       (string (decode-char 'ucs
@@ -101,7 +125,7 @@
                (+ #xAC00 (* (- cho #x1100) 21 28) (* (- jung #x1161) 28)))))
      (jung (string (decode-char 'ucs jung)))
      (cho  (string (decode-char 'ucs
-                    (or (cdr (assoc cho my-hangul-cho-compat)) #x3131))))
+                    (or (gethash cho my-hangul-cho-compat-table) #x3131))))
      (t ""))))
 
 ;;; ============================================================
@@ -115,11 +139,10 @@ CURRENT: 키 문자열 리스트.
   (let ((cho "") (jung "") (jong "") (done nil))
     (catch 'exit
       (dolist (ch current)
-        ;; chosung_proc: 초성+중성 둘 다 있으면 false
         (let ((can-cho (and (not (and (not (string= cho ""))
-                                      (not (string= jung ""))))
-                            (assoc (concat cho ch) my-hangul-cho-layout)))
-              (in-jung (assoc ch my-hangul-jung-layout)))
+                                     (not (string= jung ""))))
+                            (gethash (concat cho ch) my-hangul-cho-table)))
+              (in-jung (gethash ch my-hangul-jung-table)))
           (cond
            ;; 초성 가능
            (can-cho
@@ -135,29 +158,29 @@ CURRENT: 키 문자열 리스트.
                 (let* ((jong-chars (string-to-list jong))
                        (jong-last  (string (car (last jong-chars))))
                        (jong-rest  (apply #'string (butlast jong-chars))))
-                  (if (assoc jong-last my-hangul-cho-layout)
+                  (if (gethash jong-last my-hangul-cho-table)
                       (progn
                         (setq jong jong-rest)
                         (setq done t)
                         (throw 'exit nil))
                     ;; 도깨비불 아님: 이중모음 시도
-                    (if (assoc (concat jung ch) my-hangul-jung-layout)
+                    (if (gethash (concat jung ch) my-hangul-jung-table)
                         (setq jung (concat jung ch))
                       (setq done t) (throw 'exit nil))))
               ;; 종성 없음: 이중모음 또는 첫 중성
-              (if (assoc (concat jung ch) my-hangul-jung-layout)
+              (if (gethash (concat jung ch) my-hangul-jung-table)
                   (setq jung (concat jung ch))
                 (setq done t) (throw 'exit nil))))
 
            ;; 종성 가능 — jongsung_proc: 중성 있을 때만
            ((and (not (string= jung ""))
-                 (assoc (concat jong ch) my-hangul-jong-layout))
+                 (gethash (concat jong ch) my-hangul-jong-table))
             (setq jong (concat jong ch)))
 
            ;; 허용 안 됨
            (t (setq done t) (throw 'exit nil))))))
 
-    (let* ((size (+ (length cho) (length jung) (length jong)))
+    (let* ((size      (+ (length cho) (length jung) (length jong)))
            (remaining (if done (nthcdr size current) nil)))
       (list cho jung jong done remaining))))
 
@@ -196,9 +219,11 @@ CURRENT: 키 문자열 리스트.
 
 (defun my-hangul--clear ()
   (when (> my-hangul--preedit 0)
-    (delete-char (- my-hangul--preedit)) (setq my-hangul--preedit 0))
+    (delete-char (- my-hangul--preedit))
+    (setq my-hangul--preedit 0))
   (when (and my-hangul--overlay (overlay-buffer my-hangul--overlay))
-    (delete-overlay my-hangul--overlay) (setq my-hangul--overlay nil)))
+    (delete-overlay my-hangul--overlay)
+    (setq my-hangul--overlay nil)))
 
 ;;; ============================================================
 ;;; Process / Flush / Backspace
@@ -217,9 +242,12 @@ CURRENT: 키 문자열 리스트.
       (let ((str (my-hangul--norm cho jung jong)))
         (when (> (length str) 0) (insert str)))
       (setq my-hangul--current remaining)
-      (let* ((r2  (my-hangul--run my-hangul--current)))
-        (setq cho (nth 0 r2) jung (nth 1 r2) jong (nth 2 r2)
-              done (nth 3 r2) remaining (nth 4 r2))))
+      (let* ((r2 (my-hangul--run my-hangul--current)))
+        (setq cho       (nth 0 r2)
+              jung      (nth 1 r2)
+              jong      (nth 2 r2)
+              done      (nth 3 r2)
+              remaining (nth 4 r2))))
     (my-hangul--show (my-hangul--norm cho jung jong))))
 
 (defun my-hangul--flush ()
