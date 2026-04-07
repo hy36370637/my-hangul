@@ -8,7 +8,6 @@
 
 * **NavilIME Architecture**: Ported logic that strictly separates *preedit* (composing) and *commit* (finalized) states for a reliable and modern input feel.
 * **Vowel Expansion**: Supports intuitive double-tap sequences for complex vowels (e.g., `o`+`o` → `ㅒ`, `p`+`p` → `ㅖ`) in addition to standard `Shift` keys.
-* **Emacs Friendly**: Designed to pass through `Control`, `Meta`, and `Super` combinations seamlessly. Your custom Emacs shortcuts will work without interference even while the input method is active.
 * **Zero Dependencies**: Written in pure Elisp using built-in `quail` and `overlay` libraries. No external processes or specialized OS-level configuration required.
 
 ## Installation
@@ -36,7 +35,11 @@
     * `o` + `o` → `ㅒ`
     * `p` + `p` → `ㅖ`
     * Standard `Shift` keys (Q, W, E, R, T, O, P) are fully supported.
-
+* **Hanja & Special Characters**: 
+    * Press `F9` to convert the current Hangul syllable to Hanja.
+    * This feature utilizes Emacs' native conversion functions for seamless integration.
+    * It also supports various special characters and symbols through the same interface.
+	
 ## Technical Details
 
 The input method utilizes a specialized state-machine automaton to handle the transitions between Chosung (Initial), Jungsung (Vowel), and Jongsung (Final) characters. It includes a `jong-to-cho` transition table to facilitate the "Dokkaebibul" effect, ensuring that the final consonant of a previous syllable correctly moves to the initial position of the next syllable when a vowel is followed.
